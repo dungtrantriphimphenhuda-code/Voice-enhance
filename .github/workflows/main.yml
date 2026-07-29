@@ -1,7 +1,7 @@
 # .github/workflows/enhance_from_issue.yml
 # Triggers when a comment containing /enhance is posted on an issue.
-# Downloads linked audio files, enhances them via Adobe Podcast,
-# and replies to the issue with results.
+# Downloads linked audio files AND/OR issue attachments from the comment.
+# Enhances them via Adobe Podcast and replies to the issue with results.
 
 name: "Enhance Audio from Issue Comment"
 
@@ -11,11 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       audio_urls:
-        description: 'Comma-separated audio file URLs to enhance'
-        required: false
-        default: ''
-      issue_number:
-        description: 'Issue number to comment results back to (optional)'
+        description: 'Comma-separated audio file URLs to enhance (optional)'
         required: false
         default: ''
 
@@ -24,13 +20,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: enhance-${{ github.event.issue.number }}
+  group: enhance-${{ github.event_name == 'issue_comment' && github.event.issue.number || 'manual' }}
   cancel-in-progress: false
 
 jobs:
   enhance:
-    # Only run when the comment body starts with /enhance
-    if: startsWith(github.event.comment.body, '/enhance')
+    # Run when: comment starts with /enhance, OR manual dispatch
+    if: >-
+      (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/enhance'))
+      ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -43,7 +42,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { issue, comment } = context.payload;
+            const { issue } = context.payload;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -58,62 +57,86 @@ jobs:
         uses: actions/checkout@v4
 
       # ──────────────────────────────────────────
-      # 3. Extract URLs and download audio files
+      # 3. Download audio files from attachments + URLs
       # ──────────────────────────────────────────
-      - name: Parse comment for URLs and download files
+      - name: Download audio files
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_URL: ${{ github.event.comment.url }}
           MANUAL_URLS: ${{ github.event.inputs.audio_urls }}
-          MANUAL_ISSUE: ${{ github.event.inputs.issue_number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p ./downloads
+          token="$GITHUB_TOKEN"
+          owner="${{ github.repository_owner }}"
+          repo="${{ github.event.repository.name }}"
 
+          # ── 3a. Download attachments from the issue comment ──
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "=== Fetching attachments from comment ==="
+
+            # Get comment body HTML to find attachment images
+            COMMENT_HTML=$(curl -sL -H "Authorization: Bearer $token" \
+              "$COMMENT_URL" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          print(data.get('body', ''))
+          ")
+
+            # Extract image URLs from the comment (GitHub renders attachments as images)
+            # Format: https://github.com/user/repo/assets/ID/UUID
+            echo "$COMMENT_HTML" | grep -oP 'https://github\.com/[^/]+/[^/]+/assets/\d+/\S+' | sort -u | while read -r asset_url; do
+              filename="attachment_$(basename "$asset_url")"
+              echo "Downloading attachment: $asset_url"
+              curl -sL -H "Authorization: Bearer $token" \
+                -o "./downloads/$filename" "$asset_url"
+              if [ -s "./downloads/$filename" ]; then
+                echo "  ✓ Downloaded $(du -h "./downloads/$filename" | cut -f1)"
+              else
+                echo "  ✗ Failed, removing"
+                rm -f "./downloads/$filename"
+              fi
+            done
+          fi
+
+          # ── 3b. Also extract URLs from comment body or manual input ──
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual run: parse comma-separated URLs from input
-            echo "$MANUAL_URLS" | tr ',' '\n' | while read -r url; do
+            URL_SOURCE="$MANUAL_URLS"
+          else
+            URL_SOURCE="$COMMENT_BODY"
+          fi
+
+          if [ -n "$URL_SOURCE" ]; then
+            echo "=== Extracting URLs from input ==="
+            echo "$URL_SOURCE" | tr ',' '\n' | grep -oP 'https?://[^\s\)]+' | grep -v 'github\.com.*assets' | sort -u | while read -r url; do
               url=$(echo "$url" | xargs)  # trim whitespace
               [ -z "$url" ] && continue
               echo "Downloading: $url"
               filename=$(basename "$url" | grep -oP '[a-zA-Z0-9._-]+\.(mp3|wav|m4a|flac|ogg|oga|aac|mp4|m4v|mov|3gp|webm|3gpp)' || echo "audio_$(date +%s%N).bin")
+              # Avoid duplicate names
+              while [ -f "./downloads/$filename" ]; do
+                filename="dup_$filename"
+              done
               echo "  → $filename"
-              curl -L -s -o "./downloads/$filename" "$url"
+              curl -sL -o "./downloads/$filename" "$url"
               if [ -s "./downloads/$filename" ]; then
                 echo "  ✓ Downloaded $(du -h "./downloads/$filename" | cut -f1)"
               else
-                echo "  ✗ Failed or empty download, removing"
+                echo "  ✗ Failed or empty, removing"
                 rm -f "./downloads/$filename"
               fi
             done
-          else
-            # Issue comment run: extract URLs from comment body
-            echo "$COMMENT_BODY" | \
-              grep -oP 'https?://[^\s\)]+' | \
-              grep -v '^https?://github\.com' | \
-              while read -r url; do
-                echo "Downloading: $url"
-                filename=$(basename "$url" | grep -oP '[a-zA-Z0-9._-]+\.(mp3|wav|m4a|flac|ogg|oga|aac|mp4|m4v|mov|3gp|webm|3gpp)' || echo "audio_$(date +%s%N).bin")
-                echo "  → $filename"
-                curl -L -s -o "./downloads/$filename" "$url"
-                if [ -s "./downloads/$filename" ]; then
-                  echo "  ✓ Downloaded $(du -h "./downloads/$filename" | cut -f1)"
-                else
-                  echo "  ✗ Failed or empty download, removing"
-                  rm -f "./downloads/$filename"
-                fi
-              done
           fi
 
-          # List downloaded files
+          # ── List downloaded files ──
           echo "=== Downloaded files ==="
           ls -lah ./downloads/
 
-          # Count files
           file_count=$(find ./downloads -type f ! -name "*.json" | wc -l)
           echo "file_count=$file_count" >> $GITHUB_OUTPUT
 
           if [ "$file_count" -eq 0 ]; then
-            echo "❌ No audio files could be downloaded."
+            echo "❌ No audio files found. Make sure you attached files or provided valid URLs."
             exit 1
           fi
 
@@ -124,7 +147,6 @@ jobs:
         run: |
           mkdir -p ./auth
           echo "${{ secrets.AUTH_JSON }}" > ./auth/auth.json
-          # Verify it's valid JSON
           python3 -c "import json; json.load(open('./auth/auth.json'))" && \
             echo "✓ auth.json is valid JSON" || \
             { echo "✗ auth.json is NOT valid JSON"; exit 1; }
