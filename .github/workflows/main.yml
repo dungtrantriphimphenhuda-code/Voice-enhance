@@ -8,6 +8,16 @@ name: "Enhance Audio from Issue Comment"
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      audio_urls:
+        description: 'Comma-separated audio file URLs to enhance'
+        required: false
+        default: ''
+      issue_number:
+        description: 'Issue number to comment results back to (optional)'
+        required: false
+        default: ''
 
 permissions:
   issues: write          # required to comment on issues
@@ -28,6 +38,7 @@ jobs:
       # 1. Notify user that processing started
       # ──────────────────────────────────────────
       - name: Acknowledge comment
+        if: github.event_name == 'issue_comment'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -53,16 +64,17 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          MANUAL_URLS: ${{ github.event.inputs.audio_urls }}
+          MANUAL_ISSUE: ${{ github.event.inputs.issue_number }}
         run: |
           mkdir -p ./downloads
-          # Extract all URLs from the comment body
-          # Supports http/https URLs; ignores the /enhance keyword
-          echo "$COMMENT_BODY" | \
-            grep -oP 'https?://[^\s\)]+' | \
-            grep -v '^https?://github\.com' | \
-            while read -r url; do
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual run: parse comma-separated URLs from input
+            echo "$MANUAL_URLS" | tr ',' '\n' | while read -r url; do
+              url=$(echo "$url" | xargs)  # trim whitespace
+              [ -z "$url" ] && continue
               echo "Downloading: $url"
-              # Determine filename from URL or use a fallback
               filename=$(basename "$url" | grep -oP '[a-zA-Z0-9._-]+\.(mp3|wav|m4a|flac|ogg|oga|aac|mp4|m4v|mov|3gp|webm|3gpp)' || echo "audio_$(date +%s%N).bin")
               echo "  → $filename"
               curl -L -s -o "./downloads/$filename" "$url"
@@ -73,6 +85,24 @@ jobs:
                 rm -f "./downloads/$filename"
               fi
             done
+          else
+            # Issue comment run: extract URLs from comment body
+            echo "$COMMENT_BODY" | \
+              grep -oP 'https?://[^\s\)]+' | \
+              grep -v '^https?://github\.com' | \
+              while read -r url; do
+                echo "Downloading: $url"
+                filename=$(basename "$url" | grep -oP '[a-zA-Z0-9._-]+\.(mp3|wav|m4a|flac|ogg|oga|aac|mp4|m4v|mov|3gp|webm|3gpp)' || echo "audio_$(date +%s%N).bin")
+                echo "  → $filename"
+                curl -L -s -o "./downloads/$filename" "$url"
+                if [ -s "./downloads/$filename" ]; then
+                  echo "  ✓ Downloaded $(du -h "./downloads/$filename" | cut -f1)"
+                else
+                  echo "  ✗ Failed or empty download, removing"
+                  rm -f "./downloads/$filename"
+                fi
+              done
+          fi
 
           # List downloaded files
           echo "=== Downloaded files ==="
@@ -83,7 +113,7 @@ jobs:
           echo "file_count=$file_count" >> $GITHUB_OUTPUT
 
           if [ "$file_count" -eq 0 ]; then
-            echo "❌ No audio files could be downloaded from the comment."
+            echo "❌ No audio files could be downloaded."
             exit 1
           fi
 
@@ -133,7 +163,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: enhanced-audio-issue-${{ github.event.issue.number }}
+          name: enhanced-audio-${{ github.event_name == 'issue_comment' && format('issue-{0}', github.event.issue.number) || 'manual' }}
           path: ./enhanced/
           if-no-files-found: warn
 
@@ -141,7 +171,7 @@ jobs:
       # 9. Comment result back on the issue
       # ──────────────────────────────────────────
       - name: Post result comment on issue
-        if: always()
+        if: always() && github.event_name == 'issue_comment'
         uses: actions/github-script@v7
         env:
           RESULTS_FILE: ./enhanced/results.json
@@ -165,7 +195,7 @@ jobs:
                   `| Total files | ${total} |\n` +
                   `| Enhanced | ${success} |\n` +
                   `| Failed | ${failed} |\n\n` +
-                  `📦 [Download enhanced files](${artifactLink}) (artifact: \`enhanced-audio-issue-${issue.number}\`)\n\n` +
+                  `📦 [Download enhanced files](${artifactLink})\n\n` +
                   `_Files are prefixed with \`enhanced_\` and retain their original extension._`;
               } else {
                 const details = data.files
