@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Audio
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.aac
+*.m4a
+!tests/samples/*.wav
+
+# Models
+voice_enhance/models/*
+!voice_enhance/models/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+output/

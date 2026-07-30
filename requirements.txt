@@ -1,0 +1,27 @@
+# === Core ===
+numpy>=1.24
+soundfile>=0.12
+resampy>=0.4
+
+# === Step 1: Denoise ===
+# Pick ONE:
+deepfilternet>=0.3          # Lightweight, real-time denoise (recommended)
+# resemble-enhance>=1.2     # Alternative: Resemble AI denoise + enhance
+
+# === Step 2: Speech Restoration ===
+voicefixer>=1.0             # Restore missing frequencies, fix MP3 artifacts
+# clearer-voice-studio      # Alternative: FRCRN / MossFormer models
+
+# === Step 3: DSP Chain ===
+pedalboard>=0.9             # Spotify's studio-grade DSP library
+
+# === Step 4: Loudness Normalization ===
+pyloudnorm>=0.1             # EBU R128 / ITU-R BS.1770 LUFS metering
+
+# === Optional: Resampling fallback ===
+# librosa>=0.10             # Alternative resampler + analysis
+
+# === Optional: Full Resemble Enhance ===
+# torch>=2.0
+# torchaudio>=2.0
+# resemble-enhance
