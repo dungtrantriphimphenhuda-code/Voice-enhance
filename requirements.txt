@@ -1,7 +1,7 @@
-numpy>=1.24
-soundfile>=0.12
-resampy>=0.4
-deepfilternet>=0.3
+numpy
+soundfile
+resampy
+deepfilternet
 voicefixer
-pedalboard>=0.9
-pyloudnorm>=0.1
+pedalboard
+pyloudnorm
