@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 
 
@@ -15,6 +16,7 @@ def _deepfilternet(audio, sr):
         import deepfilternet
         from deepfilternet import DFTParams
     except ImportError:
+        print("! deepfilternet chua cai -> bo qua denoise", file=sys.stderr)
         return audio
 
     x = audio[None, :] if audio.ndim == 1 else audio
@@ -28,6 +30,7 @@ def _resemble(audio, sr):
         import torch
         from resemble_enhance.enhancer import enhance
     except ImportError:
+        print("! resemble-enhance chua cai -> bo qua denoise", file=sys.stderr)
         return audio
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

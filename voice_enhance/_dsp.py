@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 
 
@@ -6,6 +7,7 @@ def process(audio: np.ndarray, sr: int, cfg: dict) -> np.ndarray:
         import pedalboard
         from pedalboard import Pedalboard, HighpassFilter, Compressor, Limiter
     except ImportError:
+        print("! pedalboard chua cai -> bo qua DSP", file=sys.stderr)
         return audio
 
     x = audio[np.newaxis, :] if audio.ndim == 1 else audio

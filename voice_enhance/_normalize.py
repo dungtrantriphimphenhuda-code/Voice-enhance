@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 
 
@@ -8,6 +9,7 @@ def process(audio: np.ndarray, sr: int, cfg: dict) -> np.ndarray:
     try:
         import pyloudnorm as pyln
     except ImportError:
+        print("! pyloudnorm chua cai -> chuan hoa bang peak", file=sys.stderr)
         peak = np.max(np.abs(audio))
         if peak > 0:
             audio = audio * (10 ** (peak_limit / 20) / peak)

@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 import numpy as np
 import soundfile as sf
@@ -8,6 +9,7 @@ def process(audio: np.ndarray, sr: int, cfg: dict) -> np.ndarray:
     try:
         from voicefixer import VoiceFixer
     except ImportError:
+        print("! voicefixer chua cai -> bo qua restore", file=sys.stderr)
         return audio
 
     vf = VoiceFixer()
