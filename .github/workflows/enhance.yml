@@ -1,0 +1,47 @@
+name: Enhance Audio
+on:
+  workflow_dispatch:
+    inputs:
+      input:
+        description: "Path to input audio (relative to repo root)"
+        required: true
+        default: "input.wav"
+      output:
+        description: "Path for enhanced audio"
+        required: true
+        default: "output/enhanced.wav"
+  push:
+    paths:
+      - "input.wav"
+      - "input/**"
+
+jobs:
+  enhance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: voice-models-${{ runner.os }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install deepfilternet voicefixer pedalboard pyloudnorm
+
+      - name: Run pipeline
+        run: python -m voice_enhance "${{ inputs.input || 'input.wav' }}" "${{ inputs.output || 'output/enhanced.wav' }}"
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: enhanced-audio
+          path: output/

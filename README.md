@@ -1,47 +1,53 @@
-# Voice Enhance Pipeline
+# Voice Enhance
 
-[Audio Gốc] → [1. AI Denoise & Dereverberation] → [2. AI Speech Restoration] → [3. DSP Studio] → [Audio Output Studio]
+[Audio Gốc] → [Denoise] → [Restore] → [DSP] → [Normalize] → [Output Studio]
 
-Pipeline xử lý giọng nói chất lượng phòng thu dành cho YouTuber, Podcasters — hoàn toàn mã nguồn mở.
-
-## Pipeline
-
-| Step | Engine | Chức năng |
-|------|--------|-----------|
-| **1. Denoise** | DeepFilterNet / Resemble Enhance | Lọc nhiễu môi trường, khử vang, giữ nguyên dải mid |
-| **2. Restore** | VoiceFixer | Khôi phục dải tần cao bị mất, sửa méo tiếng |
-| **3. DSP** | Pedalboard (Spotify) | HPF, DeEsser, Compressor, Limiter — chuẩn phòng thu |
-| **4. Normalize** | pyloudnorm (EBU R128) | Chuẩn hóa âm lượng -16 LUFS / -14 LUFS |
-
-## Quick Start
+## Usage
 
 ```bash
 pip install -r requirements.txt
-python -m voice_enhance.cli input.wav -o enhanced.wav
+python -m voice_enhance input.wav output.wav
 ```
 
-## Tùy chỉnh
+### Python API
+
+```python
+from voice_enhance import enhance
+enhance("input.wav", "output.wav")
+
+# Tuy chinh
+enhance("input.wav", "output.wav", denoise_engine="resemble", target_lufs=-14)
+```
+
+### Google Colab
+
+Open `colab.py` and copy into a single cell.
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/enhance.yml
+name: Enhance Audio
+on: [workflow_dispatch]
+jobs:
+  enhance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -r requirements.txt
+      - run: python -m voice_enhance input.wav output.wav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enhanced
+          path: output.wav
+```
+
+## Toggle stages
 
 ```bash
-# Chỉ denoise + normalize, bỏ qua restore và DSP
-python -m voice_enhance.cli input.wav --no-restore --no-dsp
-
-# Dùng Resemble Enhance thay DeepFilterNet
-python -m voice_enhance.cli input.wav --denoise-engine resemble
-
-# Chuẩn hóa podcast (-16 LUFS mặc định)
-python -m voice_enhance.cli input.wav --target-lufs -16
-
-# Giữ file trung gian để debug
-python -m voice_enhance.cli input.wav --keep-intermediate
+python -m voice_enhance input.wav --no-restore --no-dsp
+python -m voice_enhance input.wav --denoise_engine resemble
+python -m voice_enhance input.wav --target_lufs -14
 ```
-
-## Yêu cầu
-
-- Python 3.10+
-- PyTorch (cho VoiceFixer / Resemble Enhance)
-- FFmpeg (cho đọc multi-format)
-
-## License
 
 MIT
