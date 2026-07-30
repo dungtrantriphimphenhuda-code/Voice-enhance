@@ -19,10 +19,6 @@ enhance("input.wav", "output.wav")
 enhance("input.wav", "output.wav", denoise_engine="resemble", target_lufs=-14)
 ```
 
-### Google Colab
-
-Open `colab.py` and copy into a single cell.
-
 ### GitHub Actions
 
 ```yaml
