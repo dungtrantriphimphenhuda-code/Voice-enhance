@@ -2,6 +2,6 @@ numpy>=1.24
 soundfile>=0.12
 resampy>=0.4
 deepfilternet>=0.3
-voicefixer>=1.0
+voicefixer
 pedalboard>=0.9
 pyloudnorm>=0.1
